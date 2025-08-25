@@ -1,4 +1,5 @@
-name: Build CarpetPlugin Jar
+name: Build CarpetPlugin Jar (JDK21)
+
 on:
   workflow_dispatch:
   push:
@@ -8,20 +9,56 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Setup JDK 17
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
-      - name: Give gradlew execute permission
+          java-version: 21
+
+      - name: Ensure gradlew is executable
         run: chmod +x ./gradlew || true
-      - name: Build (tries shadowJar then jar)
+
+      - name: Print environment info
         run: |
-          ./gradlew clean shadowJar || ./gradlew clean build || ./gradlew clean jar
-      - name: Upload build artifacts
+          java -version || true
+          ./gradlew --version || true
+          uname -a || true
+          ls -la || true
+
+      - name: Build (capture output to build.log)
+        run: |
+          set -o pipefail
+          ./gradlew clean shadowJar 2>&1 | tee build.log || true
+          if ! ls **/build/libs/*.jar 1> /dev/null 2>&1; then
+            ./gradlew clean build 2>&1 | tee -a build.log || true
+          fi
+          if ! ls **/build/libs/*.jar 1> /dev/null 2>&1; then
+            ./gradlew clean jar 2>&1 | tee -a build.log || true
+          fi
+          echo "---- build output files ----" >> build.log
+          ls -R >> build.log || true
+          ls -R **/build/libs || true
+
+      - name: Show produced jars (diagnostic)
+        run: |
+          echo "Listing all build/libs:"
+          find . -type d -name 'build' -prune -o -path '*/build/libs/*' -printf '%p\n' || true
+          find . -name '*.jar' -print || true
+
+      - name: Upload produced jar(s)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: carpetplugin-jar
           path: |
             **/build/libs/*.jar
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
