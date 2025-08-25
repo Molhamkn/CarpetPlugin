@@ -8,57 +8,30 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Setup JDK 21
+      - name: Setup JDK 21 (Temurin)
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 21
+          cache: gradle
 
-      - name: Ensure gradlew is executable
-        run: chmod +x ./gradlew || true
+      - name: Verify Java version
+        run: java -version
 
-      - name: Print environment info
-        run: |
-          java -version || true
-          ./gradlew --version || true
-          uname -a || true
-          ls -la || true
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
 
-      - name: Build (capture output to build.log)
-        run: |
-          set -o pipefail
-          ./gradlew clean shadowJar 2>&1 | tee build.log || true
-          if ! ls **/build/libs/*.jar 1> /dev/null 2>&1; then
-            ./gradlew clean build 2>&1 | tee -a build.log || true
-          fi
-          if ! ls **/build/libs/*.jar 1> /dev/null 2>&1; then
-            ./gradlew clean jar 2>&1 | tee -a build.log || true
-          fi
-          echo "---- build output files ----" >> build.log
-          ls -R >> build.log || true
-          ls -R **/build/libs || true
+      - name: Build with Gradle
+        run: ./gradlew clean build --stacktrace
 
-      - name: Show produced jars (diagnostic)
-        run: |
-          echo "Listing all build/libs:"
-          find . -type d -name 'build' -prune -o -path '*/build/libs/*' -printf '%p\n' || true
-          find . -name '*.jar' -print || true
-
-      - name: Upload produced jar(s)
-        if: always()
+      - name: Upload JARs
         uses: actions/upload-artifact@v4
         with:
           name: carpetplugin-jar
           path: |
             **/build/libs/*.jar
-
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: build.log
